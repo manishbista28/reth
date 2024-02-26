@@ -32,7 +32,8 @@ alloy-eips.workspace = true
 secp256k1 = { workspace = true, features = ["global-context", "recovery"] }
 
 # for eip-4844
-c-kzg = { workspace = true, features = ["serde"], optional = true }
+#c-kzg = { workspace = true, features = ["serde"], optional = true }
+c-kzg = { workspace = true, default-features = false, optional = true }
 
 # tracing
 tracing.workspace = true
