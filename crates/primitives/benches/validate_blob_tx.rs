@@ -1,5 +1,6 @@
 #![allow(missing_docs)]
 use alloy_primitives::hex;
+#[cfg(feature = "c-kzg")]
 use c_kzg::{KzgCommitment, KzgSettings};
 use criterion::{
     criterion_group, criterion_main, measurement::WallTime, BenchmarkGroup, Criterion,
@@ -19,6 +20,7 @@ use std::sync::Arc;
 // constant seed to use for the rng
 const SEED: [u8; 32] = hex!("1337133713371337133713371337133713371337133713371337133713371337");
 
+#[cfg(feature = "c-kzg")]
 /// Benchmarks EIP-48444 blob validation.
 fn blob_validation(c: &mut Criterion) {
     let mut group = c.benchmark_group("Blob Transaction KZG validation");
@@ -29,7 +31,7 @@ fn blob_validation(c: &mut Criterion) {
         validate_blob_tx(&mut group, "ValidateBlob", num_blobs, kzg_settings.clone());
     }
 }
-
+#[cfg(feature = "c-kzg")]
 fn validate_blob_tx(
     group: &mut BenchmarkGroup<'_, WallTime>,
     description: &str,
@@ -84,6 +86,6 @@ fn validate_blob_tx(
         });
     });
 }
-
+#[cfg(feature = "c-kzg")]
 criterion_group!(validate_blob, blob_validation);
 criterion_main!(validate_blob);
