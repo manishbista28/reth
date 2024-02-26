@@ -4,15 +4,14 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use std::{fmt, ops::Deref};
-use sucds::{EliasFano, Searial};
 
 /// Uses EliasFano to hold a list of integers. It provides really good compression with the
 /// capability to access its elements without decoding it.
 #[derive(Clone, PartialEq, Eq, Default)]
-pub struct IntegerList(pub EliasFano);
+pub struct IntegerList(Vec<usize>);
 
 impl Deref for IntegerList {
-    type Target = EliasFano;
+    type Target = Vec<usize>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -21,7 +20,7 @@ impl Deref for IntegerList {
 
 impl fmt::Debug for IntegerList {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let vec: Vec<usize> = self.0.iter(0).collect();
+        let vec: Vec<usize> = self.0.clone(); //.iter(0).collect();
         write!(f, "IntegerList {:?}", vec)
     }
 }
@@ -34,7 +33,7 @@ impl IntegerList {
     ///
     /// Returns an error if the list is empty or not pre-sorted.
     pub fn new<T: AsRef<[usize]>>(list: T) -> Result<Self, EliasFanoError> {
-        Ok(Self(EliasFano::from_ints(list.as_ref()).map_err(|_| EliasFanoError::InvalidInput)?))
+        Ok(Self(list.as_ref().to_vec()))
     }
 
     // Creates an IntegerList from a pre-sorted list of integers. `usize` is safe to use since
@@ -45,29 +44,47 @@ impl IntegerList {
     /// Panics if the list is empty or not pre-sorted.
     pub fn new_pre_sorted<T: AsRef<[usize]>>(list: T) -> Self {
         Self(
-            EliasFano::from_ints(list.as_ref())
-                .expect("IntegerList must be pre-sorted and non-empty."),
+            list.as_ref().to_vec()
         )
     }
 
     /// Serializes a [`IntegerList`] into a sequence of bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut vec = Vec::with_capacity(self.0.size_in_bytes());
-        self.0.serialize_into(&mut vec).expect("not able to encode integer list.");
-        vec
+        let mut bytes = Vec::new();
+        for &num in &self.0 {
+            let num_bytes = num.to_ne_bytes(); // Convert each usize to its byte representation
+            bytes.extend_from_slice(&num_bytes); // Add the bytes to the vector
+        }
+        bytes
     }
 
     /// Serializes a [`IntegerList`] into a sequence of bytes.
     pub fn to_mut_bytes<B: bytes::BufMut>(&self, buf: &mut B) {
-        let len = self.0.size_in_bytes();
-        let mut vec = Vec::with_capacity(len);
-        self.0.serialize_into(&mut vec).unwrap();
-        buf.put_slice(vec.as_slice());
+        for &num in &self.0 {
+            let bytes = num.to_ne_bytes(); // Convert each usize to its byte representation
+            buf.put_slice(&bytes);         // Write the bytes into the buffer
+        }
     }
 
     /// Deserializes a sequence of bytes into a proper [`IntegerList`].
-    pub fn from_bytes(data: &[u8]) -> Result<Self, EliasFanoError> {
-        Ok(Self(EliasFano::deserialize_from(data).map_err(|_| EliasFanoError::FailedDeserialize)?))
+    pub fn from_bytes(data: &[u8]) -> Result<IntegerList, EliasFanoError> {
+        let mut integer_list = Vec::new();
+    
+        // Assuming each usize is stored in 8 bytes (this might vary based on the system)
+        // Adjust the chunk size accordingly if usize is represented differently
+        let chunk_size = std::mem::size_of::<usize>();
+        let chunks = data.chunks_exact(chunk_size);
+    
+        if chunks.remainder().is_empty() {
+            for chunk in chunks {
+                let num = usize::from_ne_bytes(chunk.try_into().map_err(|_| EliasFanoError::FailedDeserialize)?);
+                integer_list.push(num);
+            }
+    
+            Ok(IntegerList(integer_list))
+        } else {
+            Err(EliasFanoError::FailedDeserialize)
+        }
     }
 }
 
@@ -77,7 +94,7 @@ macro_rules! impl_uint {
             impl From<Vec<$w>> for IntegerList {
                 fn from(v: Vec<$w>) -> Self {
                     let v: Vec<usize> = v.iter().map(|v| *v as usize).collect();
-                    Self(EliasFano::from_ints(v.as_slice()).expect("could not create list."))
+                    Self(v)
                 }
             }
         )+
@@ -91,7 +108,7 @@ impl Serialize for IntegerList {
     where
         S: Serializer,
     {
-        let vec = self.0.iter(0).collect::<Vec<usize>>();
+        let vec = self.0.clone();
         let mut seq = serializer.serialize_seq(Some(self.len()))?;
         for e in vec {
             seq.serialize_element(&e)?;
@@ -104,8 +121,8 @@ struct IntegerListVisitor;
 impl<'de> Visitor<'de> for IntegerListVisitor {
     type Value = IntegerList;
 
-    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("a usize array")
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("a usize array")
     }
 
     fn visit_seq<E>(self, mut seq: E) -> Result<Self::Value, E::Error>
@@ -138,7 +155,7 @@ impl<'a> Arbitrary<'a> for IntegerList {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self, arbitrary::Error> {
         let mut nums: Vec<usize> = Vec::arbitrary(u)?;
         nums.sort();
-        Ok(Self(EliasFano::from_ints(&nums).map_err(|_| arbitrary::Error::IncorrectFormat)?))
+        Ok(Self(nums))
     }
 }
 
@@ -161,7 +178,7 @@ mod tests {
     fn test_integer_list() {
         let original_list = [1, 2, 3];
         let ef_list = IntegerList::new(original_list).unwrap();
-        assert_eq!(ef_list.iter(0).collect::<Vec<usize>>(), original_list);
+        assert_eq!(ef_list.0, original_list);
     }
 
     #[test]

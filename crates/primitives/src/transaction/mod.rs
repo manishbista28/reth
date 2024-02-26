@@ -1,5 +1,4 @@
 use crate::{
-    compression::{TRANSACTION_COMPRESSOR, TRANSACTION_DECOMPRESSOR},
     keccak256, Address, BlockHashOrNumber, Bytes, TxHash, B256,
 };
 use alloy_rlp::{
@@ -881,18 +880,7 @@ impl Compact for TransactionSignedNoHash {
         let sig_bit = self.signature.to_compact(buf) as u8;
         let zstd_bit = self.transaction.input().len() >= 32;
 
-        let tx_bits = if zstd_bit {
-            TRANSACTION_COMPRESSOR.with(|compressor| {
-                let mut compressor = compressor.borrow_mut();
-                let mut tmp = bytes::BytesMut::with_capacity(200);
-                let tx_bits = self.transaction.to_compact(&mut tmp);
-
-                buf.put_slice(&compressor.compress(&tmp).expect("Failed to compress"));
-                tx_bits as u8
-            })
-        } else {
-            self.transaction.to_compact(buf) as u8
-        };
+        let tx_bits = self.transaction.to_compact(buf) as u8;
 
         // Replace bitflags with the actual values
         buf.as_mut()[start] = sig_bit | (tx_bits << 1) | ((zstd_bit as u8) << 3);
@@ -907,23 +895,7 @@ impl Compact for TransactionSignedNoHash {
         let sig_bit = bitflags & 1;
         let (signature, buf) = Signature::from_compact(buf, sig_bit);
 
-        let zstd_bit = bitflags >> 3;
-        let (transaction, buf) = if zstd_bit != 0 {
-            TRANSACTION_DECOMPRESSOR.with(|decompressor| {
-                let decompressor = &mut decompressor.borrow_mut();
-
-                // TODO: enforce that zstd is only present at a "top" level type
-
-                let transaction_type = (bitflags & 0b110) >> 1;
-                let (transaction, _) =
-                    Transaction::from_compact(decompressor.decompress(buf), transaction_type);
-
-                (transaction, buf)
-            })
-        } else {
-            let transaction_type = bitflags >> 1;
-            Transaction::from_compact(buf, transaction_type)
-        };
+        let (transaction, buf) = Transaction::from_compact(buf, bitflags >> 1);
 
         (TransactionSignedNoHash { signature, transaction }, buf)
     }

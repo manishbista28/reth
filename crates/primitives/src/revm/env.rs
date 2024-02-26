@@ -156,9 +156,7 @@ pub fn fill_tx_env_with_beacon_root_contract_call(env: &mut Env, parent_beacon_b
             source_hash: None,
             mint: None,
             is_system_transaction: Some(false),
-            // The L1 fee is not charged for the EIP-4788 transaction, submit zero bytes for the
-            // enveloped tx size.
-            enveloped_tx: Some(Bytes::default()),
+            enveloped_tx: None,
         },
     };
 

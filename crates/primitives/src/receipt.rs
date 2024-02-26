@@ -3,7 +3,7 @@ use crate::proofs::calculate_receipt_root_ref;
 #[cfg(feature = "optimism")]
 use crate::proofs::calculate_receipt_root_ref_optimism;
 use crate::{
-    compression::{RECEIPT_COMPRESSOR, RECEIPT_DECOMPRESSOR},
+    // compression::{RECEIPT_COMPRESSOR, RECEIPT_DECOMPRESSOR},
     logs_bloom, Bloom, Log, PruneSegmentError, TxType, B256,
 };
 use alloy_rlp::{length_of_length, Decodable, Encodable};
@@ -17,7 +17,6 @@ use std::{
 };
 
 /// Receipt containing result of transaction execution.
-#[main_codec(no_arbitrary, zstd)]
 #[add_arbitrary_tests]
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Receipt {
@@ -171,7 +170,6 @@ impl From<Receipt> for ReceiptWithBloom {
 }
 
 /// [`Receipt`] with calculated bloom filter.
-#[main_codec]
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct ReceiptWithBloom {
     /// Bloom filter build from logs.
